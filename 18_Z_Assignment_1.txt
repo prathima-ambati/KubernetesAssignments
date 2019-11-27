@@ -1,0 +1,128 @@
+Learning Objectives:-
+Perform a rolling update of the container version
+Roll back to the previous working state
+
+
+Problem Statement:-
+Your company's developers have just finished developing a new version of their candy-themed mobile game. They are ready to update the backend services that are running in your Kubernetes cluster. There is a deployment in the cluster managing the replicas for this application. The deployment is called candy-deployment. You have been asked to update the image for the container named candy-ws in this deployment template to a new version, linuxacademycontent/candy-service:3.
+
+After you have updated the image using a rolling update, check on the status of the update to make sure it is working. If it is not working, perform a rollback to the previous state.
+********************************************************************************************************************************************************************************************
+
+step1 : create deployment file as candy-deployment.yml
+
+vi candy-deployment.yml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: candy-deployment
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: my-app
+  template:
+    metadata:
+      labels:
+        app: my-app
+    spec:
+      containers:
+      - name: candy-ws
+        image: linuxacademycontent/candy-service:3
+	
+master $ kubectl apply -f candy-deployment.yml
+deployment.apps/candy-deployment created
+
+*******************************************************cheking the status**************************************************************************************************************
+master $ kubectl get pods -l app=my-app -L deployment
+NAME                               READY   STATUS         RESTARTS   AGE   DEPLOYMENT
+candy-deployment-c799b46db-4rd86   0/1     ErrImagePull   0          21s
+candy-deployment-c799b46db-cd5mt   0/1     ErrImagePull   0          21s
+candy-deployment-c799b46db-z5krj   0/1     ErrImagePull   0          21s
+
+******************************************************cheking the description,notiesed image version as 3*****************************************************************************
+master $ kubectl describe deployment candy-deployment
+Name:                   candy-deployment
+Namespace:              default
+CreationTimestamp:      Wed, 27 Nov 2019 09:31:28 +0000
+Labels:                 <none>
+Annotations:            deployment.kubernetes.io/revision: 1
+                        kubectl.kubernetes.io/last-applied-configuration:
+                          {"apiVersion":"apps/v1","kind":"Deployment","metadata":{"annotations":{},"name":"candy-deployment","namespace":"default"},"spec":{"replica...
+Selector:               app=my-app
+Replicas:               3 desired | 3 updated | 3 total | 0 available | 3 unavailable
+StrategyType:           RollingUpdate
+MinReadySeconds:        0
+RollingUpdateStrategy:  25% max unavailable, 25% max surge
+Pod Template:
+  Labels:  app=my-app
+  Containers:
+   candy-ws:
+    Image:        linuxacademycontent/candy-service:3
+    Port:         <none>
+    Host Port:    <none>
+    Environment:  <none>
+    Mounts:       <none>
+  Volumes:        <none>
+Conditions:
+  Type           Status  Reason
+  ----           ------  ------
+  Available      False   MinimumReplicasUnavailable
+  Progressing    True    ReplicaSetUpdated
+OldReplicaSets:  <none>
+NewReplicaSet:   candy-deployment-c799b46db (3/3 replicas created)
+Events:
+  Type    Reason             Age   From                   Message
+  ----    ------             ----  ----                   -------
+  Normal  ScalingReplicaSet  99s   deployment-controller  Scaled up replica set candy-deployment-c799b46db to 3
+
+*******************************************************Applying Rollback******************************************************************************************************************* 
+# Roll back to the previous working state
+
+kubectl set image deployment/candy-deployment candy-ws=linuxacademycontent/candy-service:2 --record
+
+******************************************************checking the description for version updation***************************************************************************************
+master $ kubectl describe deployment candy-deployment
+Name:                   candy-deployment
+Namespace:              default
+CreationTimestamp:      Wed, 27 Nov 2019 09:31:28 +0000
+Labels:                 app=my-app
+Annotations:            deployment.kubernetes.io/revision: 2
+                        kubectl.kubernetes.io/last-applied-configuration:
+                          {"apiVersion":"apps/v1","kind":"Deployment","metadata":{"annotations":{},"name":"candy-deployment","namespace":"default"},"spec":{"replica...
+                        kubernetes.io/change-cause: kubectl set image deployment/candy-deployment candy-ws=linuxacademycontent/candy-service:2 --record=true
+Selector:               app=my-app
+Replicas:               3 desired | 1 updated | 4 total | 0 available | 4 unavailable
+StrategyType:           RollingUpdate
+MinReadySeconds:        0
+RollingUpdateStrategy:  25% max unavailable, 25% max surge
+Pod Template:
+  Labels:  app=my-app
+  Containers:
+   candy-ws:
+    Image:        linuxacademycontent/candy-service:2
+    Port:         <none>
+    Host Port:    <none>
+    Environment:  <none>
+    Mounts:       <none>
+  Volumes:        <none>
+Conditions:
+  Type           Status  Reason
+  ----           ------  ------
+  Available      False   MinimumReplicasUnavailable
+  Progressing    True    ReplicaSetUpdated
+OldReplicaSets:  candy-deployment-c799b46db (3/3 replicas created)
+NewReplicaSet:   candy-deployment-5d8b6f7c67 (1/1 replicas created)
+Events:
+  Type    Reason             Age    From                   Message
+  ----    ------             ----   ----                   -------
+  Normal  ScalingReplicaSet  3m25s  deployment-controller  Scaled up replica set candy-deployment-c799b46db to 3
+  Normal  ScalingReplicaSet  9s     deployment-controller  Scaled up replica set candy-deployment-5d8b6f7c67 to 1
+
+************************************************cheking status************************************************************************************************************************
+master $ kubectl get pods -l app=my-app -L deployment
+NAME                                READY   STATUS    RESTARTS   AGE   DEPLOYMENT
+candy-deployment-5d8b6f7c67-5h5tn   1/1     Running   0          29s
+candy-deployment-5d8b6f7c67-j88xh   1/1     Running   0          5s
+candy-deployment-5d8b6f7c67-md6b4   1/1     Running   0          12s
+

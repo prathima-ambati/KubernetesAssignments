@@ -1,0 +1,78 @@
+Learning Objectives:-
+Create a probe to detect and restart unhealthy containers.
+Create a probe to detect when the container is ready to service requests.
+
+
+Problem Statement:-
+Your company just finished releasing a candy-themed mobile game. So far, things are going well, and the back end services running in your Kubernetes cluster are servicing thousands of requests. However, there have been a few issues with the back end service.
+
+Container Health Issues
+
+The first issue is caused by application instances entering an unhealthy state and responding to user requests with error messages. Unfortunately, this state does not cause the container to stop, so the Kubernetes cluster is not able to detect this state and restart the container. Luckily, the application has an internal endpoint that can be used to detect whether or not it is healthy. This endpoint is /healthz on port 8081. Your first task will be to create a probe to check this endpoint periodically. If the endpoint returns an error or fails to respond, the probe will detect this and the cluster will restart the container.
+
+Container Startup Issues
+
+Another issue is caused by new pods when they are starting up. The application takes a few seconds after startup before it is ready to service requests. As a result, some users are getting error message during this brief time. To fix this, you will need to create another probe. To detect whether the application is ready, the probe should simply make a request to the root endpoint, /, on port 80. If this request succeeds, then the application is ready.
+
+There is already a pod descriptor in the home directory: ~/candy-service-pod.yml. Edit this file to add the probes, then create the pod in the cluster to test it.
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+create yml file as http-liveness.yml
+
+master $ vi http-liveness.yml
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    test: liveness
+  name: liveness-http
+spec:
+  containers:
+  - name: liveness
+    image: k8s.gcr.io/liveness
+    args:
+    - /server
+    livenessProbe:
+      httpGet:
+        path: /healthz
+        port: 8080
+        httpHeaders:
+        - name: Custom-Header
+          value: Awesome
+      initialDelaySeconds: 3
+  restartPolicy: OnFailure 
+
+master $ kubectl apply -f http-liveness.yml
+pod/liveness-http created
+
+master $ kubectl describe pod liveness-http
+
+Events:
+  Type     Reason     Age                From               Message
+  ----     ------     ----               ----               -------
+  Normal   Scheduled  52s                default-scheduler  Successfully assigned default/liveness-http to node01
+  Normal   Pulling    10s (x2 over 51s)  kubelet, node01    Pulling image "k8s.gcr.io/liveness"
+  Normal   Pulled     10s (x2 over 50s)  kubelet, node01    Successfully pulled image "k8s.gcr.io/liveness"
+  Normal   Created    10s (x2 over 50s)  kubelet, node01    Created container liveness
+  Normal   Started    10s (x2 over 50s)  kubelet, node01    Started container liveness
+  Warning  Unhealthy  10s (x3 over 30s)  kubelet, node01    Liveness probe failed: HTTP probe failed with statuscode: 500
+  Normal   Killing    10s                kubelet, node01    Container liveness failed liveness probe, will be restarted
+
+master $ kubectl get po
+NAME            READY   STATUS    RESTARTS   AGE
+liveness-http   1/1     Running   1          67s
+
+master $ kubectl describe pod liveness-http
+Events:
+  Type     Reason     Age                  From               Message
+  ----     ------     ----                 ----               -------
+  Normal   Scheduled  2m14s                default-scheduler  Successfully assigned default/liveness-http to node01
+  Normal   Pulled     52s (x3 over 2m12s)  kubelet, node01    Successfully pulled image "k8s.gcr.io/liveness"
+  Normal   Created    52s (x3 over 2m12s)  kubelet, node01    Created container liveness
+  Normal   Started    52s (x3 over 2m12s)  kubelet, node01    Started container liveness
+  Normal   Pulling    12s (x4 over 2m13s)  kubelet, node01    Pulling image "k8s.gcr.io/liveness"
+  Warning  Unhealthy  12s (x9 over 112s)   kubelet, node01    Liveness probe failed: HTTP probe failed with statuscode: 500
+  Normal   Killing    12s (x3 over 92s)    kubelet, node01    Container liveness failed liveness probe, will be restarted
+master $ kubectl get po
+NAME            READY   STATUS    RESTARTS   AGE
+liveness-http   1/1     Running   3          2m25s
+master $
